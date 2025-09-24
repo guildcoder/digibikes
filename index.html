@@ -95,8 +95,10 @@ let explosions = [];
 let storm = {size: GAME_SIZE, shrinking:false, lastShrink:Date.now()};
 let gameRunning = false;
 let playerBike;
+let botsAlive = 20;
 let keys = {};
 let camera = {x:0,y:0};
+let spectatingText = "";
 
 // ====== Bike Class ======
 class Bike {
@@ -201,7 +203,6 @@ function startGame(){
   let names=["BitCrusher","NeonClash","Diskette","PingLord","RasterRider","GlowBug","ByteKnight","LagBeast","GridGoblin","CrashBandit","404Rider","BlueScreen","CyborgLlama","FritzBot","Glitcher","Megabyte","Tronald","ZeroCool","CaptainCache","Daemon"];
   for(let i=0;i<20;i++){
     let bot=new Bike(names[i],["red","blue","green","cyan"][Math.floor(Math.random()*4)]);
-    bot.aiCooldown=0;
     bikes.push(bot);
   }
   gameRunning=true;
@@ -214,18 +215,9 @@ function showInstructions(){
 }
 
 function updateGame(){
-  // Move bikes
-  bikes.forEach(b=>{
-    if(b.isPlayer) handlePlayerInput(b);
-    else handleBotAI(b);
-    b.move();
-  });
-
-  // Update discs
+  bikes.forEach(b=>b.move());
   discs.forEach(d=>d.update());
   discs=discs.filter(d=>d.x>0&&d.x<GAME_SIZE&&d.y>0&&d.y<GAME_SIZE);
-
-  // Update explosions
   explosions.forEach(e=>e.update());
   explosions=explosions.filter(e=>e.particles.length>0);
 
@@ -245,55 +237,6 @@ function updateGame(){
   }
 }
 
-// ====== Player Controls ======
-function handlePlayerInput(bike){
-  if(keys['w']) bike.dir='up';
-  if(keys['s']) bike.dir='down';
-  if(keys['a']) bike.dir='left';
-  if(keys['d']) bike.dir='right';
-  if(keys[' ']){ // fire disc
-    if(bike.ammo>0){
-      discs.push(new Disc(bike.x,bike.y,bike.dir,bike));
-      bike.ammo=0;
-    }
-  }
-}
-
-// ====== Bot AI ======
-function handleBotAI(bot){
-  if(!bot.alive) return;
-  bot.aiCooldown--;
-  if(bot.aiCooldown>0) return;
-
-  // chance to fire disc if near another
-  let target = bikes.find(b=>b.alive && b!==bot);
-  if(target && bot.ammo>0 && Math.random()<0.01){
-    discs.push(new Disc(bot.x,bot.y,bot.dir,bot));
-    bot.ammo=0;
-  }
-
-  // check ahead for collision
-  let danger=false;
-  for(let other of bikes){
-    for(let t of other.trail){
-      if(Math.abs(bot.x-t.x)<20 && Math.abs(bot.y-t.y)<20){
-        danger=true;
-      }
-    }
-  }
-
-  // avoid walls/storm
-  if(bot.x<100||bot.x>GAME_SIZE-100||bot.y<100||bot.y>GAME_SIZE-100) danger=true;
-
-  if(danger || Math.random()<0.05){
-    let dirs=['up','down','left','right'];
-    bot.dir=dirs[Math.floor(Math.random()*4)];
-  }
-
-  bot.aiCooldown=10; // think every 10 frames
-}
-
-// ====== Drawing ======
 function drawGame(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle="black"; ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -310,11 +253,6 @@ function gameLoop(){
   drawGame();
   requestAnimationFrame(gameLoop);
 }
-
-// ====== Controls ======
-document.addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=true;});
-document.addEventListener("keyup",e=>{keys[e.key.toLowerCase()]=false;});
-
 </script>
 </body>
 </html>
