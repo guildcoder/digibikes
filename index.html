@@ -108,7 +108,7 @@ class Bike{
     this.trail.push({x:this.x,y:this.y});
     if(this.trail.length>TRAIL_LENGTH) this.trail.shift();
   }
-  aiMove(delta){
+aiMove(delta){
     this.lastDecision += delta;
 
     // Reassign target if dead or missing
@@ -173,6 +173,7 @@ class Bike{
         }
     }
 }
+
 
   draw(){
     if(!this.alive) return;
