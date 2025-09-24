@@ -1,1 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digibike Royale</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+html,body{margin:0;padding:0;overflow:hidden;height:100%;background:black;font-family:'Share Tech Mono', monospace;}
+canvas{display:block;}
+#menu{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  display:flex;flex-direction:column;justify-content:center;align-items:center;
+  background: rgba(0,0,0,0.85); z-index:10;color:white;
+}
+#menu input,#menu select,#menu button{
+  margin:8px;padding:12px;font-size:18px;
+  background:#111;border:2px solid cyan;color:white;border-radius:6px;
+  text-shadow:0 0 5px cyan;
+  cursor:pointer;transition:0.2s;
+}
+#menu input:focus,#menu select:focus,#menu button:hover{
+  border-color:#0ff;text-shadow:0 0 10px #0ff;outline:none;
+}
+#title{
+  font-size:92px;color:cyan;font-weight:bold;
+  animation:bob 1.5s infinite alternate;
+  margin-bottom:20px;
+  text-shadow:0 0 15px cyan,0 0 30px cyan;
+}
+@keyframes bob{0%{transform:translateY(0px);}100%{transform:translateY(20px);}}
+#hud{position:absolute;top:10px;left:10px;color:white;font-weight:bold;font-size:20px;z-index:5;}
+#instructions{display:none;text-align:center;background:rgba(0,0,0,0.9);padding:20px;margin-top:10px;border-radius:10px;}
+#spectateMenu{
+  position:absolute;bottom:5%;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,0.85);padding:20px;border-radius:10px;color:white;display:none;z-index:20;text-align:center;
+}
+#spectateMenu button{
+  padding:12px;font-size:18px;margin-top:10px;
+  background:#111;border:2px solid cyan;color:white;border-radius:6px;
+  text-shadow:0 0 5px cyan;cursor:pointer;transition:0.2s;
+}
+#spectateMenu button:hover{border-color:#0ff;text-shadow:0 0 10px #0ff;}
+</style>
+</head>
+<body>
+<div id="menu">
+<div id="title">Digibike Royale</div>
+<input id="playerName" placeholder="Enter your name" maxlength="12"/>
+<select id="bikeColor">
+<option value="cyan">Cyan</option>
+<option value="magenta">Magenta</option>
+<option value="yellow">Yellow</option>
+<option value="lime">Lime</option>
+<option value="blue">Blue</option>
+<option value="red">Red</option>
+<option value="green">Green</option>
+</select>
+<button id="startBtn">Let's race!</button>
+<button id="showInstructions">Controls & Instructions</button>
+<div id="instructions">
+<p>WASD: Move</p>
+<p>Space: Throw light disc (requires ammo from discs)</p>
+<p>Shift: Pause</p>
+<p>M: Expand mini-map while held</p>
+<p>Collect white discs to gain ammo.</p>
+</div>
+</div>
+
+<div id="spectateMenu">
+<h2>Spectating...</h2>
+<button id="backToMenu">Back to Main Menu</button>
+</div>
+
+<div id="hud"></div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+let width=canvas.width=window.innerWidth;
+let height=canvas.height=window.innerHeight;
+const hud=document.getElementById('hud');
+const spectateMenu=document.getElementById('spectateMenu');
+
+let gameRunning=false, paused=false, miniMapExpanded=false;
+const PLAYER_SPEED=2, BOT_COUNT=15, TRAIL_LENGTH=50, DISC_COUNT=10;
+
+let storm={x:0,y:0,w:width,h:height,shrinkTimer:0,shrinkCooldown:30000,shrinkDuration:5000,moving:false,startX:0,startY:0,endX:0,endY:0,moveProgress:0};
+let camera={x:0,y:0};
+const tronNames=["BitCrusher","LightSpinner","GridGhost","NeonKnight","SparkWraith","ByteRider","PhotonPunk","LaserLad","Glowtron","CircuitCreeper","FlashFury","DataDash","TurboByte","PixelPhantom","ZapZebra","NeonNarwhal","QuantumQuill","ElectroElf","VaporViper","GlitchGoblin"];
+const bikeColors=["cyan","magenta","yellow","lime","blue","red","green"];
+let player,bots=[],discs=[],projectiles=[],particles=[],spectating=null;
+
+class Bike{
+  constructor(x,y,color,name,isBot=false){
+    this.x=x; this.y=y; this.color=color; this.trailColor=color; this.name=name; this.isBot=isBot;
+    this.dir='right'; this.trail=[]; this.alive=true; this.ammo=0;
+    this.decisionTimer=Math.random()*1000+500; this.lastDecision=0; this.target=null; this.killer=null;
+  }
+  move(delta){
+    if(!this.alive) return;
+    if(this.isBot) this.aiMove(delta);
+    if(this.dir==='up') this.y-=PLAYER_SPEED;
+    if(this.dir==='down') this.y+=PLAYER_SPEED;
+    if(this.dir==='left') this.x-=PLAYER_SPEED;
+    if(this.dir==='right') this.x+=PLAYER_SPEED;
+    this.trail.push({x:this.x,y:this.y});
+    if(this.trail.length>TRAIL_LENGTH) this.trail.shift();
+  }
+  aiMove(delta){
+    this.lastDecision += delta;
+
+    // Reassign target if dead or missing
+    if(!this.target || !this.target.alive){
+        let possible = [player, ...bots.filter(b => b !== this && b.alive)];
+        if(possible.length > 0) this.target = possible[Math.floor(Math.random() * possible.length)];
+    }
+
+    // Make decisions periodically
+    if(this.lastDecision > this.decisionTimer){
+        this.lastDecision = 0;
+        this.decisionTimer = 200 + Math.random() * 400; // faster, more reactive
+
+        if(!this.target) return;
+
+        // Compute vector toward target
+        let dx = this.target.x - this.x;
+        let dy = this.target.y - this.y;
+
+        // Determine preferred direction
+        let preferredDirs = [];
+        if(Math.abs(dx) > Math.abs(dy)) {
+            preferredDirs.push(dx > 0 ? 'right' : 'left');
+            preferredDirs.push(dy > 0 ? 'down' : 'up');
+        } else {
+            preferredDirs.push(dy > 0 ? 'down' : 'up');
+            preferredDirs.push(dx > 0 ? 'right' : 'left');
+        }
+
+        // Filter safe directions
+        let safeDirs = preferredDirs.filter(d => {
+            let nx = this.x + (d === 'left' ? -PLAYER_SPEED : d === 'right' ? PLAYER_SPEED : 0);
+            let ny = this.y + (d === 'up' ? -PLAYER_SPEED : d === 'down' ? PLAYER_SPEED : 0);
+
+            // Check storm boundaries
+            if(nx < storm.x || nx > storm.x + storm.w || ny < storm.y || ny > storm.y + storm.h) return false;
+
+            // Check trails
+            let danger = false;
+            [player, ...bots].forEach(b => b.trail.forEach(t => {
+                if(Math.abs(nx-t.x)<10 && Math.abs(ny-t.y)<10) danger=true;
+            }));
+
+            // Check projectiles
+            projectiles.forEach(p => {if(Math.abs(nx-p.x)<15 && Math.abs(ny-p.y)<15) danger=true;});
+
+            return !danger;
+        });
+
+        // If preferred safe exists, pick it, otherwise random safe
+        if(safeDirs.length > 0){
+            this.dir = safeDirs[0];
+        } else {
+            // Emergency move: pick any safe
+            let allDirs = ['up','down','left','right'];
+            let emergencyDirs = allDirs.filter(d => {
+                let nx = this.x + (d === 'left' ? -PLAYER_SPEED : d === 'right' ? PLAYER_SPEED : 0);
+                let ny = this.y + (d === 'up' ? -PLAYER_SPEED : d === 'down' ? PLAYER_SPEED : 0);
+                return nx>=storm.x && nx<=storm.x+storm.w && ny>=storm.y && ny<=storm.y+storm.h;
+            });
+            this.dir = emergencyDirs.length > 0 ? emergencyDirs[Math.floor(Math.random()*emergencyDirs.length)] : this.dir;
+        }
+    }
+}
+
+  draw(){
+    if(!this.alive) return;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = this.trailColor;
+    this.trail.forEach(t=>ctx.fillRect(t.x-camera.x-2,t.y-camera.y-2,4,4));
+    ctx.shadowBlur=0;
+    ctx.fillStyle=this.trailColor;
+    ctx.fillRect(this.x-camera.x-5,this.y-camera.y-5,10,10);
+    ctx.fillStyle='white'; ctx.font='16px Arial';
+    ctx.fillText(this.name,this.x-camera.x-ctx.measureText(this.name).width/2,this.y-camera.y-10);
+  }
+}
+
+class Disc{constructor(){this.x=Math.random()*width; this.y=Math.random()*height; this.radius=8;}
+draw(){ctx.shadowBlur=10;ctx.shadowColor='white';ctx.beginPath();ctx.arc(this.x-camera.x,this.y-camera.y,this.radius,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}}
+
+class Projectile{constructor(x,y,dir,color){this.x=x;this.y=y;this.dir=dir;this.color=color;this.alive=true;}
+update(){if(this.dir==='up') this.y-=5;if(this.dir==='down') this.y+=5;if(this.dir==='left') this.x-=5;if(this.dir==='right') this.x+=5;if(this.x<0||this.x>width||this.y<0||this.y>height)this.alive=false;}
+draw(){ctx.shadowBlur=12;ctx.shadowColor=this.color;ctx.beginPath();ctx.arc(this.x-camera.x,this.y-camera.y,5,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
+}
+
+const keys={w:false,a:false,s:false,d:false,shift:false,space:false,m:false};
+document.addEventListener('keydown',e=>{if(e.key==='w')keys.w=true;if(e.key==='a')keys.a=true;if(e.key==='s')keys.s=true;if(e.key==='d')keys.d=true;if(e.key==='Shift')keys.shift=true;if(e.key===' ')keys.space=true;if(e.key==='m')keys.m=true;});
+document.addEventListener('keyup',e=>{if(e.key==='w')keys.w=false;if(e.key==='a')keys.a=false;if(e.key==='s')keys.s=false;if(e.key==='d')keys.d=false;if(e.key==='Shift')keys.shift=false;if(e.key===' ')keys.space=false;if(e.key==='m')keys.m=false;});
+
+document.addEventListener('DOMContentLoaded', ()=>{
+const menu=document.getElementById('menu');
+const startBtn=document.getElementById('startBtn');
+const showInstructions=document.getElementById('showInstructions');
+const instructions=document.getElementById('instructions');
+const backToMenu=document.getElementById('backToMenu');
+
+startBtn.addEventListener('click',()=>{
+  const playerNameInput=document.getElementById('playerName').value||'Player';
+  const bikeColorInput=document.getElementById('bikeColor').value||'cyan';
+  menu.style.display='none';
+  startGame(playerNameInput,bikeColorInput);
+});
+
+showInstructions.addEventListener('click',()=>{instructions.style.display=instructions.style.display==='none'?'block':'none';});
+backToMenu.addEventListener('click'=>{spectateMenu.style.display='none';menu.style.display='flex';gameRunning=false;spectating=null;});
+
+const bikeColorSelect=document.getElementById('bikeColor');
+bikeColorSelect.addEventListener('change',()=>{
+  const color=bikeColorSelect.value;
+  menu.style.background=`rgba(${hexToRgb(color)},0.85)`;
+  [startBtn,showInstructions].forEach(btn=>{
+    btn.style.background=color;
+    btn.style.border=`2px solid white`;
+    btn.style.color='white';
+    btn.style.boxShadow=`0 0 15px ${color}`;
+    btn.style.fontFamily=`'Share Tech Mono', monospace`;
+  });
+  document.getElementById('title').style.color=color;
+  document.getElementById('title').style.textShadow=`0 0 20px ${color},0 0 40px ${color}`;
+});
+
+let lastTime=0;
+
+function startGame(playerName,bikeColor){
+  gameRunning=true; spectating=null;
+  player=new Bike(Math.random()*width,Math.random()*height,bikeColor,playerName);
+  bots=[]; discs=[]; projectiles=[]; particles=[];
+  for(let i=0;i<BOT_COUNT;i++){
+    let name=tronNames[Math.floor(Math.random()*tronNames.length)];
+    let color=bikeColors[Math.floor(Math.random()*bikeColors.length)];
+    bots.push(new Bike(Math.random()*width,Math.random()*height,color,name,true));
+  }
+  for(let i=0;i<DISC_COUNT;i++) discs.push(new Disc());
+  storm={x:0,y:0,w:width,h:height,shrinkTimer:0,shrinkCooldown:30000,shrinkDuration:5000,moving:false,startX:0,startY:0,endX:0,endY:0,moveProgress:0};
+  lastTime=performance.now();
+  loop(lastTime);
+}
+
+function loop(timestamp){
+  if(!gameRunning) return;
+  let delta=timestamp-lastTime; lastTime=timestamp;
+  requestAnimationFrame(loop);
+  if(paused) return;
+  update(delta);
+  draw();
+}
+
+function hexToRgb(color){const colors={cyan:'0,255,255',magenta:'255,0,255',yellow:'255,255,0',lime:'0,255,0',blue:'0,0,255',red:'255,0,0',green:'0,128,0'};return colors[color]||'255,255,255';}
+
+function createParticles(x,y,color){for(let i=0;i<40;i++){let angle=Math.random()*Math.PI*2,speed=Math.random()*4+1,vx=Math.cos(angle)*speed,vy=Math.sin(angle)*speed,life=30+Math.random()*30;particles.push({x,y,vx,vy,life,color});}}
+function updateParticles(){for(let i=particles.length-1;i>=0;i--){let p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vx*=0.95;p.vy*=0.95;p.life--;if(p.life<=0)particles.splice(i,1);}}
+function drawParticles(){particles.forEach(p=>{let alpha=Math.max(p.life/60,0);ctx.fillStyle=`rgba(${hexToRgb(p.color)},${alpha})`;ctx.fillRect(p.x-camera.x,p.y-camera.y,3,3);});}
+
+function startSpectating(bike){spectating=bike;spectateMenu.style.display='block';}
+
+window.addEventListener('resize',()=>{width=canvas.width=window.innerWidth;height=canvas.height=window.innerHeight;});
+
+// ===== UPDATE =====
+function update(delta){
+paused=keys.shift; miniMapExpanded=keys.m;
+if(player.alive){
+  if(keys.w)player.dir='up';
+  if(keys.s)player.dir='down';
+  if(keys.a)player.dir='left';
+  if(keys.d)player.dir='right';
+}
+if(player.alive)player.move(delta);
+bots.forEach(b=>b.move(delta));
+
+// Storm
+storm.shrinkTimer+=delta;
+if(storm.shrinkTimer>storm.shrinkCooldown){
+  storm.shrinkTimer=0;storm.startX=storm.x;storm.startY=storm.y;
+  storm.endX=Math.random()*(width-storm.w); storm.endY=Math.random()*(height-storm.h); storm.moving=true;
+}
+if(storm.moving){storm.moveProgress+=delta/storm.shrinkDuration;if(storm.moveProgress>=1){storm.moveProgress=0;storm.moving=false;}
+storm.x=storm.startX+(storm.endX-storm.startX)*storm.moveProgress;storm.y=storm.startY+(storm.endY-storm.startY)*storm.moveProgress;
+storm.w*=0.999;storm.h*=0.999;}
+
+// Discs
+discs.forEach((d,i)=>{[player,...bots].forEach(b=>{if(!b.alive)return;let dx=b.x-d.x,dy=b.y-d.y;if(Math.sqrt(dx*dx+dy*dy)<15){b.ammo++;discs.splice(i,1);discs.push(new Disc());}});});
+
+// Projectiles
+if(keys.space && player.alive && player.ammo>0){projectiles.push(new Projectile(player.x+(player.dir==='right'?10:player.dir==='left'?-10:0),player.y+(player.dir==='down'?10:player.dir==='up'?-10:0),player.dir,player.color));player.ammo--;}
+bots.forEach(b=>{if(!b.alive)return;if(b.ammo>0 && Math.random()<0.01){projectiles.push(new Projectile(b.x+(b.dir==='right'?10:b.dir==='left'?-10:0),b.y+(b.dir==='down'?10:b.dir==='up'?-10:0),b.dir,b.color));b.ammo--;}});
+
+projectiles.forEach((p,i)=>{p.update();if(!p.alive){projectiles.splice(i,1);return;}[player,...bots].forEach(b=>{if(!b.alive)return;if(b.color!==p.color && Math.abs(b.x-p.x)<10 && Math.abs(b.y-p.y)<10){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.color===p.color);if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}});});
+
+// Trail & Storm
+let allTrails=[...bots.map(b=>b.trail),player.trail].flat();
+[player,...bots].forEach(b=>{if(!b.alive)return;for(let t of allTrails){if(b.trail.includes(t))continue;if(Math.abs(b.x-t.x)<5 && Math.abs(b.y-t.y)<5){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.trail.includes(t));if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}}if(b.x<storm.x||b.x>storm.x+storm.w||b.y<storm.y||b.y>storm.y+storm.h){b.alive=false;createParticles(b.x,b.y,b.color);let aliveKiller=[player,...bots].find(bk=>bk.alive);if(aliveKiller)aliveKiller.trail=aliveKiller.trail.concat(b.trail);b.killer=aliveKiller;if(b===player)startSpectating(aliveKiller);}});
+
+updateParticles();
+camera.x=spectating?spectating.x-width/2:player.x-width/2;
+camera.y=spectating?spectating.y-height/2:player.y-height/2;
+
+let alive=[player,...bots].filter(b=>b.alive);
+if(alive.length<=1){gameRunning=false;spectating=null;setTimeout(()=>{document.getElementById('menu').style.display='flex';},1000);}
+}
+
+// ===== DRAW =====
+function draw(){
+ctx.clearRect(0,0,width,height);
+ctx.fillStyle='red'; ctx.fillRect(-camera.x,-camera.y,width*2,height*2);
+ctx.clearRect(storm.x-camera.x,storm.y-camera.y,storm.w,storm.h);
+
+discs.forEach(d=>d.draw());
+if(player.alive) player.draw();
+bots.forEach(b=>b.draw());
+projectiles.forEach(p=>p.draw());
+drawParticles();
+
+let aliveCount=[player,...bots].filter(b=>b.alive).length;
+hud.innerHTML=`Players: ${aliveCount}<br>Ammo: ${player.alive?player.ammo:0}`;
+
+let mapSize=miniMapExpanded?200:100;
+ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(10,10,mapSize,mapSize);
+ctx.strokeStyle='red'; ctx.strokeRect(storm.x/width*mapSize,storm.y/height*mapSize,storm.w/width*mapSize,storm.h/height*mapSize);
+[player,...bots].forEach(b=>{if(!b.alive)return;ctx.fillStyle=b.color;ctx.fillRect(b.x/width*mapSize+10,b.y/height*mapSize+10,4,4);});
+}
+
+</script>
+</body>
+</html>
 
