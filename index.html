@@ -84,7 +84,7 @@ const hud=document.getElementById('hud');
 const spectateMenu=document.getElementById('spectateMenu');
 
 let gameRunning=false, paused=false, miniMapExpanded=false;
-const PLAYER_SPEED=2, BOT_COUNT=15, TRAIL_LENGTH=50, DISC_COUNT=10;
+const PLAYER_SPEED=2.2, BOT_COUNT=15, TRAIL_LENGTH=50, DISC_COUNT=10;
 
 let storm={x:0,y:0,w:width,h:height,shrinkTimer:0,shrinkCooldown:30000,shrinkDuration:5000,moving:false,startX:0,startY:0,endX:0,endY:0,moveProgress:0};
 let camera={x:0,y:0};
@@ -96,6 +96,7 @@ class Bike{
   constructor(x,y,color,name,isBot=false){
     this.x=x; this.y=y; this.color=color; this.trailColor=color; this.name=name; this.isBot=isBot;
     this.dir='right'; this.trail=[]; this.alive=true; this.ammo=0;
+    this.trailGrace = 2; // number of frames you can move over your own trail safely
     this.decisionTimer=Math.random()*1000+500; this.lastDecision=0; this.target=null; this.killer=null;
   }
   move(delta){
@@ -105,7 +106,7 @@ class Bike{
     if(this.dir==='down') this.y+=PLAYER_SPEED;
     if(this.dir==='left') this.x-=PLAYER_SPEED;
     if(this.dir==='right') this.x+=PLAYER_SPEED;
-    this.trail.push({x:this.x,y:this.y});
+    this.trail.push({x:this.x,y:this.y, bike:this});
     if(this.trail.length>TRAIL_LENGTH) this.trail.shift();
   }
   aiMove(delta){
@@ -274,7 +275,27 @@ function update(delta){
   if(keys.space && player && player.alive && player.ammo>0){projectiles.push(new Projectile(player.x+(player.dir==='right'?10:player.dir==='left'?-10:0),player.y+(player.dir==='down'?10:player.dir==='up'?-10:0),player.dir,player.color));player.ammo--;}
   bots.forEach(b=>{if(!b.alive)return;if(b.ammo>0 && Math.random()<0.01){projectiles.push(new Projectile(b.x+(b.dir==='right'?10:b.dir==='left'?-10:0),b.y+(b.dir==='down'?10:b.dir==='up'?-10:0),b.dir,b.color));b.ammo--;}});
 
-  projectiles.forEach((p,i)=>{p.update();if(!p.alive){projectiles.splice(i,1);return;}[player,...bots].forEach(b=>{if(!b || !b.alive)return;if(b.color!==p.color && Math.abs(b.x-p.x)<10 && Math.abs(b.y-p.y)<10){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.color===p.color);if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}});});
+  projectiles.forEach((p,i)=>{p.update();if(!p.alive){projectiles.splice(i,1);return;}[player,...bots].forEach(b => {
+    if(!b.alive) return;
+    for(let t of allTrails){
+        if(b.trail.includes(t)) continue;
+
+        // Check if hitting your own trail
+        if(t.bike === b && b.trailGrace > 0){
+            b.trailGrace--; // decrement grace counter
+            continue;       // ignore this collision
+        }
+
+        if(Math.abs(b.x-t.x)<5 && Math.abs(b.y-t.y)<5){
+            b.alive = false;
+            createParticles(b.x,b.y,b.color);
+            let killer = [player,...bots].find(k => k.trail.includes(t));
+            if(killer) killer.trail = killer.trail.concat(b.trail.map(tt => ({x:tt.x, y:tt.y})));
+            b.killer = killer;
+            if(b === player) startSpectating(killer);
+        }
+    }
+});
 
   let allTrails=[...bots.map(b=>b.trail),player.trail].flat();
   [player,...bots].forEach(b=>{if(!b || !b.alive)return;for(let t of allTrails){if(b.trail.includes(t)) continue;if(Math.abs(b.x-t.x)<5 && Math.abs(b.y-t.y)<5){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.trail.includes(t));if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}}if(b.x<storm.x||b.x>storm.x+storm.w||b.y<storm.y||b.y>storm.y+storm.h){b.alive=false;createParticles(b.x,b.y,b.color);let aliveKiller=[player,...bots].find(bk=>bk.alive);if(aliveKiller)aliveKiller.trail=aliveKiller.trail.concat(b.trail);b.killer=aliveKiller;if(b===player)startSpectating(aliveKiller);}});
