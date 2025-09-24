@@ -98,11 +98,21 @@ const bikeColors=["cyan","magenta","yellow","lime","blue","red","green"];
 let player,bots=[],discs=[],projectiles=[],particles=[],spectating=null;
 
 class Bike{
-  constructor(x,y,color,name,isBot=false){
-    this.x=x;this.y=y;this.color=color;this.name=name;this.isBot=isBot;
-    this.dir='right';this.trail=[];this.alive=true;this.ammo=0;
-    this.decisionTimer=Math.random()*1000+500;this.lastDecision=0;this.target=null;
-    this.killer=null;
+  constructor(x, y, color, name, isBot=false){
+    this.x = x;
+    this.y = y;
+    this.color = color;         // original color
+    this.trailColor = color;    // fixed trail color
+    this.name = name;
+    this.isBot = isBot;
+    this.dir = 'right';
+    this.trail = [];
+    this.alive = true;
+    this.ammo = 0;
+    this.decisionTimer = Math.random()*1000+500;
+    this.lastDecision = 0;
+    this.target = null;
+    this.killer = null;
   }
   move(delta){
     if(!this.alive) return;
@@ -114,45 +124,60 @@ class Bike{
     this.trail.push({x:this.x,y:this.y});
     if(this.trail.length>TRAIL_LENGTH) this.trail.shift();
   }
-  aiMove(delta){
-    this.lastDecision+=delta;
+aiMove(delta){
+    this.lastDecision += delta;
     if(!this.target || !this.target.alive){
-      let possible=[player,...bots.filter(b=>b!==this && b.alive)];
-      if(possible.length>0) this.target=possible[Math.floor(Math.random()*possible.length)];
+        let possible = [player, ...bots.filter(b => b !== this && b.alive)];
+        if(possible.length > 0) this.target = possible[Math.floor(Math.random() * possible.length)];
     }
-    if(this.lastDecision>this.decisionTimer){
-      this.lastDecision=0; this.decisionTimer=500+Math.random()*1000;
-      if(!this.target) return;
-      // Predict target future position
-      let futureX=this.target.x+(this.target.dir==='right'?30:this.target.dir==='left'?-30:0);
-      let futureY=this.target.y+(this.target.dir==='down'?30:this.target.dir==='up'?-30:0);
-      let dx=futureX-this.x, dy=futureY-this.y;
-      let preferred=(Math.abs(dx)>Math.abs(dy))?(dx>0?'right':'left'):(dy>0?'down':'up');
 
-      // Filter safe directions
-      let safeDirs=['up','down','left','right'].filter(d=>{
-        let nx=this.x+(d==='left'?-PLAYER_SPEED:d==='right'?PLAYER_SPEED:0);
-        let ny=this.y+(d==='up'?-PLAYER_SPEED:d==='down'?PLAYER_SPEED:0);
-        if(nx<storm.x||nx>storm.x+storm.w||ny<storm.y||ny>storm.y+storm.h) return false;
-        let danger=false;
-        [player,...bots].forEach(b=>{b.trail.forEach(t=>{if(Math.abs(nx-t.x)<10 && Math.abs(ny-t.y)<10) danger=true;});});
-        projectiles.forEach(p=>{if(Math.abs(nx-p.x)<15 && Math.abs(ny-p.y)<15) danger=true;});
-        [player,...bots].forEach(b=>{if(b!==this && Math.abs(nx-b.x)<20 && Math.abs(ny-b.y)<20) danger=true;});
-        return !danger;
-      });
-      if(safeDirs.length>0){
-        this.dir=safeDirs.includes(preferred)?preferred:safeDirs[Math.floor(Math.random()*safeDirs.length)];
-      }
+    if(this.lastDecision > this.decisionTimer){
+        this.lastDecision = 0;
+        this.decisionTimer = 500 + Math.random() * 1000;
+        if(!this.target) return;
+
+        // Predict target future position slightly
+        let futureX = this.target.x + (this.target.dir === 'right' ? 20 : this.target.dir === 'left' ? -20 : 0);
+        let futureY = this.target.y + (this.target.dir === 'down' ? 20 : this.target.dir === 'up' ? -20 : 0);
+        let dx = futureX - this.x;
+        let dy = futureY - this.y;
+        let preferred = (Math.abs(dx) > Math.abs(dy)) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+
+        // Evaluate safe directions dynamically
+        let safeDirs = ['up','down','left','right'].filter(d => {
+            let nx = this.x + (d==='left'?-PLAYER_SPEED:d==='right'?PLAYER_SPEED:0);
+            let ny = this.y + (d==='up'?-PLAYER_SPEED:d==='down'?PLAYER_SPEED:0);
+            if(nx < storm.x || nx > storm.x + storm.w || ny < storm.y || ny > storm.y + storm.h) return false;
+
+            // Check trails
+            let danger = false;
+            [player,...bots].forEach(b => b.trail.forEach(t => {if(Math.abs(nx-t.x)<10 && Math.abs(ny-t.y)<10) danger=true;}));
+
+            // Check projectiles
+            projectiles.forEach(p => {if(Math.abs(nx-p.x)<15 && Math.abs(ny-p.y)<15) danger=true;});
+
+            return !danger;
+        });
+
+        // Pick preferred safe direction if available, else random safe
+        if(safeDirs.length > 0){
+            this.dir = safeDirs.includes(preferred) ? preferred : safeDirs[Math.floor(Math.random() * safeDirs.length)];
+        } else {
+            // If no safe direction, randomly turn
+            this.dir = ['up','down','left','right'][Math.floor(Math.random()*4)];
+        }
     }
-  }
-  draw(){
+}
+  ddraw() {
     if(!this.alive) return;
     ctx.shadowBlur = 12;
-    ctx.shadowColor = this.color;
+    ctx.shadowColor = this.trailColor;
     this.trail.forEach(t => ctx.fillRect(t.x-camera.x-2, t.y-camera.y-2, 4, 4));
     ctx.shadowBlur = 0;
-    ctx.fillStyle=this.color; ctx.fillRect(this.x-camera.x-5,this.y-camera.y-5,10,10);
-    ctx.fillStyle='white'; ctx.font='16px Share Tech Mono';
+    ctx.fillStyle = this.trailColor;
+    ctx.fillRect(this.x-camera.x-5,this.y-camera.y-5,10,10);
+    ctx.fillStyle='white';
+    ctx.font='16px Arial';
     ctx.fillText(this.name,this.x-camera.x-ctx.measureText(this.name).width/2,this.y-camera.y-10);
   }
 }
@@ -188,6 +213,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
     });
     showInstructions.addEventListener('click',()=>{instructions.style.display = instructions.style.display==='none'?'block':'none';});
     backToMenu.addEventListener('click',()=>{spectateMenu.style.display='none';menu.style.display='flex';gameRunning=false;spectating=null;});
+  const bikeColorSelect = document.getElementById('bikeColor');
+bikeColorSelect.addEventListener('change', ()=>{
+    const color = bikeColorSelect.value;
+
+    // Update menu background (semi-transparent)
+    menu.style.background = `rgba(${hexToRgb(color)}, 0.85)`;
+
+    // Update buttons
+    [startBtn, showInstructions].forEach(btn => {
+        btn.style.background = color;
+        btn.style.border = `2px solid white`;
+        btn.style.color = 'white';
+        btn.style.boxShadow = `0 0 15px ${color}`;
+        btn.style.fontFamily = `'Orbitron', sans-serif`; // Tron-style font
+    });
+
+    // Update title glow
+    document.getElementById('title').style.color = color;
+    document.getElementById('title').style.textShadow = `0 0 20px ${color}, 0 0 40px ${color}`;
 });
 let lastTime=0;
 
@@ -213,6 +257,10 @@ function loop(timestamp){
     if(paused) return;
     update(delta);
     draw();
+}
+function hexToRgb(color){
+    const colors={cyan:'0,255,255',magenta:'255,0,255',yellow:'255,255,0',lime:'0,255,0',blue:'0,0,255',red:'255,0,0',green:'0,128,0'};
+    return colors[color]||'255,255,255';
 }
 
 // Particles
@@ -344,7 +392,10 @@ function update(delta){
                 b.alive=false;
                 createParticles(b.x,b.y,b.color);
                 let killer=[player,...bots].find(k=>k.trail.includes(t));
-                if(killer) killer.trail=killer.trail.concat(b.trail);
+                iif(killer){
+            // Append only positions to killer trail
+                killer.trail = killer.trail.concat(b.trail.map(t => ({x:t.x, y:t.y})));
+                  }
                 b.killer=killer;
                 if(b===player) startSpectating(killer);
             }
