@@ -277,7 +277,7 @@ function update(delta){
   projectiles.forEach((p,i)=>{p.update();if(!p.alive){projectiles.splice(i,1);return;}[player,...bots].forEach(b=>{if(!b || !b.alive)return;if(b.color!==p.color && Math.abs(b.x-p.x)<10 && Math.abs(b.y-p.y)<10){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.color===p.color);if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}});});
 
   let allTrails=[...bots.map(b=>b.trail),player.trail].flat();
-  [player,...bots].forEach(b=>{if(!b || !b.alive)return;for(let t of allTrails){if(Math.abs(b.x-t.x)<5 && Math.abs(b.y-t.y)<5){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.trail.includes(t));if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}}if(b.x<storm.x||b.x>storm.x+storm.w||b.y<storm.y||b.y>storm.y+storm.h){b.alive=false;createParticles(b.x,b.y,b.color);let aliveKiller=[player,...bots].find(bk=>bk.alive);if(aliveKiller)aliveKiller.trail=aliveKiller.trail.concat(b.trail);b.killer=aliveKiller;if(b===player)startSpectating(aliveKiller);}});
+  [player,...bots].forEach(b=>{if(!b || !b.alive)return;for(let t of allTrails){if(b.trail.includes(t)) continue;if(Math.abs(b.x-t.x)<5 && Math.abs(b.y-t.y)<5){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.trail.includes(t));if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}}if(b.x<storm.x||b.x>storm.x+storm.w||b.y<storm.y||b.y>storm.y+storm.h){b.alive=false;createParticles(b.x,b.y,b.color);let aliveKiller=[player,...bots].find(bk=>bk.alive);if(aliveKiller)aliveKiller.trail=aliveKiller.trail.concat(b.trail);b.killer=aliveKiller;if(b===player)startSpectating(aliveKiller);}});
 
   updateParticles();
   camera.x=spectating?spectating.x-width/2:player.x-width/2;
@@ -289,9 +289,17 @@ function update(delta){
 
 // ===== DRAW =====
 function draw(){
-  ctx.clearRect(0,0,width,height);
-  ctx.fillStyle='red'; ctx.fillRect(-camera.x,-camera.y,width*2,height*2);
-  ctx.clearRect(storm.x-camera.x,storm.y-camera.y,storm.w,storm.h);
+  // Fill the entire canvas with red (the storm/danger zone)
+ctx.fillStyle = 'red';
+ctx.fillRect(0, 0, width, height);
+
+// Clear the storm area (safe zone)
+ctx.clearRect(storm.x - camera.x, storm.y - camera.y, storm.w, storm.h);
+
+// Optional: draw storm border in red for emphasis
+ctx.strokeStyle = 'red';
+ctx.lineWidth = 4;
+ctx.strokeRect(storm.x - camera.x, storm.y - camera.y, storm.w, storm.h);
 
   discs.forEach(d=>d.draw());
   if(player && player.alive) player.draw();
