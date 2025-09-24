@@ -45,31 +45,31 @@ canvas{display:block;}
 </head>
 <body>
 <div id="menu">
-<div id="title">Digibike Royale</div>
-<input id="playerName" placeholder="Enter your name" maxlength="12"/>
-<select id="bikeColor">
-<option value="cyan">Cyan</option>
-<option value="magenta">Magenta</option>
-<option value="yellow">Yellow</option>
-<option value="lime">Lime</option>
-<option value="blue">Blue</option>
-<option value="red">Red</option>
-<option value="green">Green</option>
-</select>
-<button id="startBtn">Let's race!</button>
-<button id="showInstructions">Controls & Instructions</button>
-<div id="instructions">
-<p>WASD: Move</p>
-<p>Space: Throw light disc (requires ammo from discs)</p>
-<p>Shift: Pause</p>
-<p>M: Expand mini-map while held</p>
-<p>Collect white discs to gain ammo.</p>
-</div>
+  <div id="title">Digibike Royale</div>
+  <input id="playerName" placeholder="Enter your name" maxlength="12"/>
+  <select id="bikeColor">
+    <option value="cyan">Cyan</option>
+    <option value="magenta">Magenta</option>
+    <option value="yellow">Yellow</option>
+    <option value="lime">Lime</option>
+    <option value="blue">Blue</option>
+    <option value="red">Red</option>
+    <option value="green">Green</option>
+  </select>
+  <button id="startBtn">Let's race!</button>
+  <button id="showInstructions">Controls & Instructions</button>
+  <div id="instructions">
+    <p>WASD: Move</p>
+    <p>Space: Throw light disc (requires ammo from discs)</p>
+    <p>Shift: Pause</p>
+    <p>M: Expand mini-map while held</p>
+    <p>Collect white discs to gain ammo.</p>
+  </div>
 </div>
 
 <div id="spectateMenu">
-<h2>Spectating...</h2>
-<button id="backToMenu">Back to Main Menu</button>
+  <h2>Spectating...</h2>
+  <button id="backToMenu">Back to Main Menu</button>
 </div>
 
 <div id="hud"></div>
@@ -108,81 +108,53 @@ class Bike{
     this.trail.push({x:this.x,y:this.y});
     if(this.trail.length>TRAIL_LENGTH) this.trail.shift();
   }
-aiMove(delta){
+  aiMove(delta){
+    if(!player) return;
     this.lastDecision += delta;
-
-    // Reassign target if dead or missing
     if(!this.target || !this.target.alive){
-        let possible = [player, ...bots.filter(b => b !== this && b.alive)];
-        if(possible.length > 0) this.target = possible[Math.floor(Math.random() * possible.length)];
+      let possible = [player,...bots.filter(b=>b!==this && b.alive)];
+      if(possible.length>0) this.target = possible[Math.floor(Math.random()*possible.length)];
     }
-
-    // Make decisions periodically
-    if(this.lastDecision > this.decisionTimer){
-        this.lastDecision = 0;
-        this.decisionTimer = 200 + Math.random() * 400; // faster, more reactive
-
-        if(!this.target) return;
-
-        // Compute vector toward target
-        let dx = this.target.x - this.x;
-        let dy = this.target.y - this.y;
-
-        // Determine preferred direction
-        let preferredDirs = [];
-        if(Math.abs(dx) > Math.abs(dy)) {
-            preferredDirs.push(dx > 0 ? 'right' : 'left');
-            preferredDirs.push(dy > 0 ? 'down' : 'up');
-        } else {
-            preferredDirs.push(dy > 0 ? 'down' : 'up');
-            preferredDirs.push(dx > 0 ? 'right' : 'left');
-        }
-
-        // Filter safe directions
-        let safeDirs = preferredDirs.filter(d => {
-            let nx = this.x + (d === 'left' ? -PLAYER_SPEED : d === 'right' ? PLAYER_SPEED : 0);
-            let ny = this.y + (d === 'up' ? -PLAYER_SPEED : d === 'down' ? PLAYER_SPEED : 0);
-
-            // Check storm boundaries
-            if(nx < storm.x || nx > storm.x + storm.w || ny < storm.y || ny > storm.y + storm.h) return false;
-
-            // Check trails
-            let danger = false;
-            [player, ...bots].forEach(b => b.trail.forEach(t => {
-                if(Math.abs(nx-t.x)<10 && Math.abs(ny-t.y)<10) danger=true;
-            }));
-
-            // Check projectiles
-            projectiles.forEach(p => {if(Math.abs(nx-p.x)<15 && Math.abs(ny-p.y)<15) danger=true;});
-
-            return !danger;
+    if(this.lastDecision>this.decisionTimer){
+      this.lastDecision=0;
+      this.decisionTimer = 200 + Math.random()*400;
+      if(!this.target) return;
+      let dx=this.target.x-this.x;
+      let dy=this.target.y-this.y;
+      let preferredDirs = [];
+      if(Math.abs(dx)>Math.abs(dy)){
+        preferredDirs.push(dx>0?'right':'left');
+        preferredDirs.push(dy>0?'down':'up');
+      }else{
+        preferredDirs.push(dy>0?'down':'up');
+        preferredDirs.push(dx>0?'right':'left');
+      }
+      let safeDirs = preferredDirs.filter(d=>{
+        let nx=this.x + (d==='left'?-PLAYER_SPEED:d==='right'?PLAYER_SPEED:0);
+        let ny=this.y + (d==='up'?-PLAYER_SPEED:d==='down'?PLAYER_SPEED:0);
+        if(nx<storm.x||nx>storm.x+storm.w||ny<storm.y||ny>storm.y+storm.h) return false;
+        let danger=false;
+        [player,...bots].forEach(b=>b.trail.forEach(t=>{if(Math.abs(nx-t.x)<10 && Math.abs(ny-t.y)<10) danger=true;}));
+        projectiles.forEach(p=>{if(Math.abs(nx-p.x)<15 && Math.abs(ny-p.y)<15) danger=true;});
+        return !danger;
+      });
+      if(safeDirs.length>0) this.dir=safeDirs[0];
+      else{
+        let allDirs=['up','down','left','right'];
+        let emergencyDirs = allDirs.filter(d=>{
+          let nx=this.x + (d==='left'?-PLAYER_SPEED:d==='right'?PLAYER_SPEED:0);
+          let ny=this.y + (d==='up'?-PLAYER_SPEED:d==='down'?PLAYER_SPEED:0);
+          return nx>=storm.x && nx<=storm.x+storm.w && ny>=storm.y && ny<=storm.y+storm.h;
         });
-
-        // If preferred safe exists, pick it, otherwise random safe
-        if(safeDirs.length > 0){
-            this.dir = safeDirs[0];
-        } else {
-            // Emergency move: pick any safe
-            let allDirs = ['up','down','left','right'];
-            let emergencyDirs = allDirs.filter(d => {
-                let nx = this.x + (d === 'left' ? -PLAYER_SPEED : d === 'right' ? PLAYER_SPEED : 0);
-                let ny = this.y + (d === 'up' ? -PLAYER_SPEED : d === 'down' ? PLAYER_SPEED : 0);
-                return nx>=storm.x && nx<=storm.x+storm.w && ny>=storm.y && ny<=storm.y+storm.h;
-            });
-            this.dir = emergencyDirs.length > 0 ? emergencyDirs[Math.floor(Math.random()*emergencyDirs.length)] : this.dir;
-        }
+        this.dir = emergencyDirs.length>0?emergencyDirs[Math.floor(Math.random()*emergencyDirs.length)]:this.dir;
+      }
     }
-}
-
-
-
+  }
   draw(){
     if(!this.alive) return;
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = this.trailColor;
+    ctx.shadowBlur=12; ctx.shadowColor=this.trailColor;
     this.trail.forEach(t=>ctx.fillRect(t.x-camera.x-2,t.y-camera.y-2,4,4));
-    ctx.shadowBlur=0;
-    ctx.fillStyle=this.trailColor;
+    ctx.shadowBlur=0; ctx.fillStyle=this.trailColor;
     ctx.fillRect(this.x-camera.x-5,this.y-camera.y-5,10,10);
     ctx.fillStyle='white'; ctx.font='16px Arial';
     ctx.fillText(this.name,this.x-camera.x-ctx.measureText(this.name).width/2,this.y-camera.y-10);
@@ -190,18 +162,17 @@ aiMove(delta){
 }
 
 class Disc{constructor(){this.x=Math.random()*width; this.y=Math.random()*height; this.radius=8;}
-draw(){ctx.shadowBlur=10;ctx.shadowColor='white';ctx.beginPath();ctx.arc(this.x-camera.x,this.y-camera.y,this.radius,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}}
+draw(){ctx.shadowBlur=10; ctx.shadowColor='white'; ctx.beginPath(); ctx.arc(this.x-camera.x,this.y-camera.y,this.radius,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;}}
 
 class Projectile{constructor(x,y,dir,color){this.x=x;this.y=y;this.dir=dir;this.color=color;this.alive=true;}
 update(){if(this.dir==='up') this.y-=5;if(this.dir==='down') this.y+=5;if(this.dir==='left') this.x-=5;if(this.dir==='right') this.x+=5;if(this.x<0||this.x>width||this.y<0||this.y>height)this.alive=false;}
-draw(){ctx.shadowBlur=12;ctx.shadowColor=this.color;ctx.beginPath();ctx.arc(this.x-camera.x,this.y-camera.y,5,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
+draw(){ctx.shadowBlur=12; ctx.shadowColor=this.color; ctx.beginPath(); ctx.arc(this.x-camera.x,this.y-camera.y,5,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;}
 }
 
 const keys={w:false,a:false,s:false,d:false,shift:false,space:false,m:false};
 document.addEventListener('keydown',e=>{if(e.key==='w')keys.w=true;if(e.key==='a')keys.a=true;if(e.key==='s')keys.s=true;if(e.key==='d')keys.d=true;if(e.key==='Shift')keys.shift=true;if(e.key===' ')keys.space=true;if(e.key==='m')keys.m=true;});
 document.addEventListener('keyup',e=>{if(e.key==='w')keys.w=false;if(e.key==='a')keys.a=false;if(e.key==='s')keys.s=false;if(e.key==='d')keys.d=false;if(e.key==='Shift')keys.shift=false;if(e.key===' ')keys.space=false;if(e.key==='m')keys.m=false;});
 
-document.addEventListener('DOMContentLoaded', ()=>{
 const menu=document.getElementById('menu');
 const startBtn=document.getElementById('startBtn');
 const showInstructions=document.getElementById('showInstructions');
@@ -216,7 +187,12 @@ startBtn.addEventListener('click',()=>{
 });
 
 showInstructions.addEventListener('click',()=>{instructions.style.display=instructions.style.display==='none'?'block':'none';});
-backToMenu.addEventListener('click'=>{spectateMenu.style.display='none';menu.style.display='flex';gameRunning=false;spectating=null;});
+backToMenu.addEventListener('click',()=>{
+  spectateMenu.style.display='none';
+  menu.style.display='flex';
+  gameRunning=false;
+  spectating=null;
+});
 
 const bikeColorSelect=document.getElementById('bikeColor');
 bikeColorSelect.addEventListener('change',()=>{
@@ -234,7 +210,6 @@ bikeColorSelect.addEventListener('change',()=>{
 });
 
 let lastTime=0;
-
 function startGame(playerName,bikeColor){
   gameRunning=true; spectating=null;
   player=new Bike(Math.random()*width,Math.random()*height,bikeColor,playerName);
@@ -271,69 +246,67 @@ window.addEventListener('resize',()=>{width=canvas.width=window.innerWidth;heigh
 
 // ===== UPDATE =====
 function update(delta){
-paused=keys.shift; miniMapExpanded=keys.m;
-if(player.alive){
-  if(keys.w)player.dir='up';
-  if(keys.s)player.dir='down';
-  if(keys.a)player.dir='left';
-  if(keys.d)player.dir='right';
-}
-if(player.alive)player.move(delta);
-bots.forEach(b=>b.move(delta));
+  paused=keys.shift; miniMapExpanded=keys.m;
+  if(player && player.alive){
+    if(keys.w)player.dir='up';
+    if(keys.s)player.dir='down';
+    if(keys.a)player.dir='left';
+    if(keys.d)player.dir='right';
+  }
+  if(player && player.alive) player.move(delta);
+  bots.forEach(b=>b.move(delta));
 
-// Storm
-storm.shrinkTimer+=delta;
-if(storm.shrinkTimer>storm.shrinkCooldown){
-  storm.shrinkTimer=0;storm.startX=storm.x;storm.startY=storm.y;
-  storm.endX=Math.random()*(width-storm.w); storm.endY=Math.random()*(height-storm.h); storm.moving=true;
-}
-if(storm.moving){storm.moveProgress+=delta/storm.shrinkDuration;if(storm.moveProgress>=1){storm.moveProgress=0;storm.moving=false;}
-storm.x=storm.startX+(storm.endX-storm.startX)*storm.moveProgress;storm.y=storm.startY+(storm.endY-storm.startY)*storm.moveProgress;
-storm.w*=0.999;storm.h*=0.999;}
+  storm.shrinkTimer+=delta;
+  if(storm.shrinkTimer>storm.shrinkCooldown){
+    storm.shrinkTimer=0;storm.startX=storm.x;storm.startY=storm.y;
+    storm.endX=Math.random()*(width-storm.w); storm.endY=Math.random()*(height-storm.h); storm.moving=true;
+  }
+  if(storm.moving){
+    storm.moveProgress+=delta/storm.shrinkDuration;
+    if(storm.moveProgress>=1){storm.moveProgress=0;storm.moving=false;}
+    storm.x=storm.startX+(storm.endX-storm.startX)*storm.moveProgress;
+    storm.y=storm.startY+(storm.endY-storm.startY)*storm.moveProgress;
+    storm.w*=0.999;storm.h*=0.999;
+  }
 
-// Discs
-discs.forEach((d,i)=>{[player,...bots].forEach(b=>{if(!b.alive)return;let dx=b.x-d.x,dy=b.y-d.y;if(Math.sqrt(dx*dx+dy*dy)<15){b.ammo++;discs.splice(i,1);discs.push(new Disc());}});});
+  discs.forEach((d,i)=>{[player,...bots].forEach(b=>{if(!b || !b.alive)return;let dx=b.x-d.x,dy=b.y-d.y;if(Math.sqrt(dx*dx+dy*dy)<15){b.ammo++;discs.splice(i,1);discs.push(new Disc());}});});
 
-// Projectiles
-if(keys.space && player.alive && player.ammo>0){projectiles.push(new Projectile(player.x+(player.dir==='right'?10:player.dir==='left'?-10:0),player.y+(player.dir==='down'?10:player.dir==='up'?-10:0),player.dir,player.color));player.ammo--;}
-bots.forEach(b=>{if(!b.alive)return;if(b.ammo>0 && Math.random()<0.01){projectiles.push(new Projectile(b.x+(b.dir==='right'?10:b.dir==='left'?-10:0),b.y+(b.dir==='down'?10:b.dir==='up'?-10:0),b.dir,b.color));b.ammo--;}});
+  if(keys.space && player && player.alive && player.ammo>0){projectiles.push(new Projectile(player.x+(player.dir==='right'?10:player.dir==='left'?-10:0),player.y+(player.dir==='down'?10:player.dir==='up'?-10:0),player.dir,player.color));player.ammo--;}
+  bots.forEach(b=>{if(!b.alive)return;if(b.ammo>0 && Math.random()<0.01){projectiles.push(new Projectile(b.x+(b.dir==='right'?10:b.dir==='left'?-10:0),b.y+(b.dir==='down'?10:b.dir==='up'?-10:0),b.dir,b.color));b.ammo--;}});
 
-projectiles.forEach((p,i)=>{p.update();if(!p.alive){projectiles.splice(i,1);return;}[player,...bots].forEach(b=>{if(!b.alive)return;if(b.color!==p.color && Math.abs(b.x-p.x)<10 && Math.abs(b.y-p.y)<10){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.color===p.color);if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}});});
+  projectiles.forEach((p,i)=>{p.update();if(!p.alive){projectiles.splice(i,1);return;}[player,...bots].forEach(b=>{if(!b || !b.alive)return;if(b.color!==p.color && Math.abs(b.x-p.x)<10 && Math.abs(b.y-p.y)<10){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.color===p.color);if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}});});
 
-// Trail & Storm
-let allTrails=[...bots.map(b=>b.trail),player.trail].flat();
-[player,...bots].forEach(b=>{if(!b.alive)return;for(let t of allTrails){if(b.trail.includes(t))continue;if(Math.abs(b.x-t.x)<5 && Math.abs(b.y-t.y)<5){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.trail.includes(t));if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}}if(b.x<storm.x||b.x>storm.x+storm.w||b.y<storm.y||b.y>storm.y+storm.h){b.alive=false;createParticles(b.x,b.y,b.color);let aliveKiller=[player,...bots].find(bk=>bk.alive);if(aliveKiller)aliveKiller.trail=aliveKiller.trail.concat(b.trail);b.killer=aliveKiller;if(b===player)startSpectating(aliveKiller);}});
+  let allTrails=[...bots.map(b=>b.trail),player.trail].flat();
+  [player,...bots].forEach(b=>{if(!b || !b.alive)return;for(let t of allTrails){if(b.trail.includes(t))continue;if(Math.abs(b.x-t.x)<5 && Math.abs(b.y-t.y)<5){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.trail.includes(t));if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}}if(b.x<storm.x||b.x>storm.x+storm.w||b.y<storm.y||b.y>storm.y+storm.h){b.alive=false;createParticles(b.x,b.y,b.color);let aliveKiller=[player,...bots].find(bk=>bk.alive);if(aliveKiller)aliveKiller.trail=aliveKiller.trail.concat(b.trail);b.killer=aliveKiller;if(b===player)startSpectating(aliveKiller);}});
 
-updateParticles();
-camera.x=spectating?spectating.x-width/2:player.x-width/2;
-camera.y=spectating?spectating.y-height/2:player.y-height/2;
+  updateParticles();
+  camera.x=spectating?spectating.x-width/2:player.x-width/2;
+  camera.y=spectating?spectating.y-height/2:player.y-height/2;
 
-let alive=[player,...bots].filter(b=>b.alive);
-if(alive.length<=1){gameRunning=false;spectating=null;setTimeout(()=>{document.getElementById('menu').style.display='flex';},1000);}
+  let alive=[player,...bots].filter(b=>b && b.alive);
+  if(alive.length<=1){gameRunning=false;spectating=null;setTimeout(()=>{menu.style.display='flex';},1000);}
 }
 
 // ===== DRAW =====
 function draw(){
-ctx.clearRect(0,0,width,height);
-ctx.fillStyle='red'; ctx.fillRect(-camera.x,-camera.y,width*2,height*2);
-ctx.clearRect(storm.x-camera.x,storm.y-camera.y,storm.w,storm.h);
+  ctx.clearRect(0,0,width,height);
+  ctx.fillStyle='red'; ctx.fillRect(-camera.x,-camera.y,width*2,height*2);
+  ctx.clearRect(storm.x-camera.x,storm.y-camera.y,storm.w,storm.h);
 
-discs.forEach(d=>d.draw());
-if(player.alive) player.draw();
-bots.forEach(b=>b.draw());
-projectiles.forEach(p=>p.draw());
-drawParticles();
+  discs.forEach(d=>d.draw());
+  if(player && player.alive) player.draw();
+  bots.forEach(b=>b.draw());
+  projectiles.forEach(p=>p.draw());
+  drawParticles();
 
-let aliveCount=[player,...bots].filter(b=>b.alive).length;
-hud.innerHTML=`Players: ${aliveCount}<br>Ammo: ${player.alive?player.ammo:0}`;
+  let aliveCount=[player,...bots].filter(b=>b && b.alive).length;
+  hud.innerHTML=`Players: ${aliveCount}<br>Ammo: ${player && player.alive?player.ammo:0}`;
 
-let mapSize=miniMapExpanded?200:100;
-ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(10,10,mapSize,mapSize);
-ctx.strokeStyle='red'; ctx.strokeRect(storm.x/width*mapSize,storm.y/height*mapSize,storm.w/width*mapSize,storm.h/height*mapSize);
-[player,...bots].forEach(b=>{if(!b.alive)return;ctx.fillStyle=b.color;ctx.fillRect(b.x/width*mapSize+10,b.y/height*mapSize+10,4,4);});
+  let mapSize=miniMapExpanded?200:100;
+  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(10,10,mapSize,mapSize);
+  ctx.strokeStyle='red'; ctx.strokeRect(storm.x/width*mapSize,storm.y/height*mapSize,storm.w/width*mapSize,storm.h/height*mapSize);
+  [player,...bots].forEach(b=>{if(!b || !b.alive)return;ctx.fillStyle=b.color;ctx.fillRect(b.x/width*mapSize+10,b.y/height*mapSize+10,4,4);});
 }
-
 </script>
 </body>
 </html>
-
