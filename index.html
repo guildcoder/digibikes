@@ -133,27 +133,25 @@ class Bike{
         let nx=this.x + (d==='left'?-PLAYER_SPEED:d==='right'?PLAYER_SPEED:0);
         let ny=this.y + (d==='up'?-PLAYER_SPEED:d==='down'?PLAYER_SPEED:0);
         if(nx<storm.x||nx>storm.x+storm.w||ny<storm.y||ny>storm.y+storm.h) return false;
-       let danger=false;
 
-// Check ALL trails, including self
-[player, ...bots].forEach(b=>{
-  if(!b || !b.alive) return;
-  b.trail.forEach((t, i)=>{
-    // For own trail, skip last few points so bot can move forward
-    if (b === this && i >= b.trail.length - 10) return;
-    if (Math.abs(nx - t.x) < 10 && Math.abs(ny - t.y) < 10) {
-      danger = true;
-    }
-  });
-});
+        let danger=false;
+        [player, ...bots].forEach(b=>{
+          if(!b || !b.alive) return;
+          b.trail.forEach((t,i)=>{
+            if(b===this && i>=b.trail.length-10) return; // skip last few self-trail points
+            if(Math.abs(nx-t.x)<10 && Math.abs(ny-t.y)<10) danger=true;
+          });
+        });
+        projectiles.forEach(p=>{
+          if(Math.abs(nx-p.x)<15 && Math.abs(ny-p.y)<15) danger=true;
+        });
 
-// Projectiles check
-projectiles.forEach(p=>{
-  if(Math.abs(nx-p.x)<15 && Math.abs(ny-p.y)<15) danger=true;
-});
+        return !danger;
+      });
 
-      if(safeDirs.length>0) this.dir=safeDirs[0];
-      else{
+      if(safeDirs.length>0){
+        this.dir=safeDirs[0];
+      }else{
         let allDirs=['up','down','left','right'];
         let emergencyDirs = allDirs.filter(d=>{
           let nx=this.x + (d==='left'?-PLAYER_SPEED:d==='right'?PLAYER_SPEED:0);
@@ -288,66 +286,40 @@ function update(delta){
   if(keys.space && player && player.alive && player.ammo>0){projectiles.push(new Projectile(player.x+(player.dir==='right'?10:player.dir==='left'?-10:0),player.y+(player.dir==='down'?10:player.dir==='up'?-10:0),player.dir,player.color));player.ammo--;}
   bots.forEach(b=>{if(!b.alive)return;if(b.ammo>0 && Math.random()<0.01){projectiles.push(new Projectile(b.x+(b.dir==='right'?10:b.dir==='left'?-10:0),b.y+(b.dir==='down'?10:b.dir==='up'?-10:0),b.dir,b.color));b.ammo--;}});
 
-  projectiles.forEach((p,i)=>{p.update();if(!p.alive){projectiles.splice(i,1);return;}[player,...bots].forEach(b=>{if(!b || !b.alive)return;if(b.color!==p.color && Math.abs(b.x-p.x)<10 && Math.abs(b.y-p.y)<10){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.color===p.color);if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;if(b===player)startSpectating(killer);}});});
+  projectiles.forEach((p,i)=>{p.update();if(!p.alive){projectiles.splice(i,1);return;}[player,...bots].forEach(b=>{if(!b || !b.alive)return;if(b.color!==p.color && Math.abs(b.x-p.x)<10 && Math.abs(b.y-p.y)<10){b.alive=false;createParticles(b.x,b.y,b.color);let killer=[player,...bots].find(k=>k.color===p.color);if(killer)killer.trail=killer.trail.concat(b.trail.map(t=>({x:t.x,y:t.y})));b.killer=killer;}});});
 
-let allTrails=[...bots.map(b=>b.trail),player.trail].flat();
-[player,...bots].forEach(b=>{
-  if(!b || !b.alive) return;
-  
-  for (let t of allTrails) {
-    // allow skipping only the *last N segments* of your own trail
-    let ownTrail = b.trail;
-    let recent = ownTrail.slice(-10); // last 10 points safe zone
-    if (recent.includes(t)) continue;
-
-    if (Math.abs(b.x - t.x) < 5 && Math.abs(b.y - t.y) < 5) {
-      b.alive = false;
-      createParticles(b.x, b.y, b.color);
-      let killer = [player,...bots].find(k=>k.trail.includes(t));
-      if(killer) killer.trail = killer.trail.concat(b.trail.map(tt=>({x:tt.x,y:tt.y})));
-      b.killer = killer;
-      if(b === player) startSpectating(killer);
-    }
-  }
-
-  // storm bounds check stays the same
-});
+  [player,...bots].forEach(b=>{if(!b || !b.alive)return;if(b.x<storm.x||b.x>storm.x+storm.w||b.y<storm.y||b.y>storm.y+storm.h){b.alive=false;createParticles(b.x,b.y,b.color);}});
+  [player,...bots].forEach(b=>{if(!b || !b.alive)return;[player,...bots].forEach(other=>{if(!other||!other.alive)return;if(other===b)return;other.trail.forEach(t=>{if(Math.abs(b.x-t.x)<10 && Math.abs(b.y-t.y)<10){b.alive=false;createParticles(b.x,b.y,b.color);b.killer=other;}});});});
+  [player,...bots].forEach(b=>{if(!b||!b.alive)return;b.trail.forEach((t,i)=>{if(i>=b.trail.length-10)return;if(Math.abs(b.x-t.x)<10 && Math.abs(b.y-t.y)<10){b.alive=false;createParticles(b.x,b.y,b.color);}});});
 
   updateParticles();
-  camera.x=spectating?spectating.x-width/2:player.x-width/2;
-  camera.y=spectating?spectating.y-height/2:player.y-height/2;
 
-  let alive=[player,...bots].filter(b=>b && b.alive);
-  if(alive.length<=1){gameRunning=false;spectating=null;setTimeout(()=>{menu.style.display='flex';},1000);}
+  if(player && !player.alive && !spectating){startSpectating(player.killer||bots.find(b=>b.alive));}
+  let alive=[player,...bots].filter(b=>b&&b.alive);
+  if(alive.length===1 && gameRunning){alert(alive[0].name+" wins!");gameRunning=false;menu.style.display='flex';}
 }
 
 // ===== DRAW =====
 function draw(){
-  // Fill the entire canvas with red (the storm/danger zone)
-ctx.fillStyle = 'red';
-ctx.fillRect(0, 0, width, height);
+  ctx.clearRect(0,0,width,height);
+  ctx.strokeStyle='cyan'; ctx.lineWidth=5; ctx.strokeRect(storm.x-camera.x,storm.y-camera.y,storm.w,storm.h);
 
-// Clear the storm area (safe zone)
-ctx.clearRect(storm.x - camera.x, storm.y - camera.y, storm.w, storm.h);
-
-// Optional: draw storm border in red for emphasis
-ctx.strokeStyle = 'red';
-ctx.lineWidth = 4;
-ctx.strokeRect(storm.x - camera.x, storm.y - camera.y, storm.w, storm.h);
+  if(player && player.alive){camera.x=player.x-width/2;camera.y=player.y-height/2;}
+  else if(spectating && spectating.alive){camera.x=spectating.x-width/2;camera.y=spectating.y-height/2;}
 
   discs.forEach(d=>d.draw());
-  if(player && player.alive) player.draw();
-  bots.forEach(b=>b.draw());
   projectiles.forEach(p=>p.draw());
+  if(player) player.draw();
+  bots.forEach(b=>b.draw());
   drawParticles();
 
-  let aliveCount=[player,...bots].filter(b=>b && b.alive).length;
-  hud.innerHTML=`Players: ${aliveCount}<br>Ammo: ${player && player.alive?player.ammo:0}`;
+  let mapSize=miniMapExpanded?300:150;
+  ctx.strokeStyle='white'; ctx.strokeRect(20,height-mapSize-20,mapSize,mapSize);
+  ctx.fillStyle='rgba(0,255,255,0.2)'; ctx.fillRect(20+(storm.x/width)*mapSize,height-mapSize-20+(storm.y/height)*mapSize,(storm.w/width)*mapSize,(storm.h/height)*mapSize);
+  [player,...bots].forEach(b=>{if(!b||!b.alive)return;ctx.fillStyle=b.color;ctx.fillRect(20+(b.x/width)*mapSize-2,height-mapSize-20+(b.y/height)*mapSize-2,4,4);});
 
-  let mapSize=miniMapExpanded?200:100;
-  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(10,10,mapSize,mapSize);
-  ctx.strokeStyle='red'; ctx.strokeRect(storm.x/width*mapSize,storm.y/height*mapSize,storm.w/width*mapSize,storm.h/height*mapSize);
-  [player,...bots].forEach(b=>{if(!b || !b.alive)return;ctx.fillStyle=b.color;ctx.fillRect(b.x/width*mapSize+10,b.y/height*mapSize+10,4,4);});
+  let aliveCount=[player,...bots].filter(b=>b&&b.alive).length;
+  hud.innerText=`Alive: ${aliveCount} | Ammo: ${player?player.ammo:0}`;
 }
 </script>
 </body>
