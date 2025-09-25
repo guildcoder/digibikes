@@ -133,11 +133,25 @@ class Bike{
         let nx=this.x + (d==='left'?-PLAYER_SPEED:d==='right'?PLAYER_SPEED:0);
         let ny=this.y + (d==='up'?-PLAYER_SPEED:d==='down'?PLAYER_SPEED:0);
         if(nx<storm.x||nx>storm.x+storm.w||ny<storm.y||ny>storm.y+storm.h) return false;
-        let danger=false;
-        [player,...bots].forEach(b=>b.trail.forEach(t=>{if(Math.abs(nx-t.x)<10 && Math.abs(ny-t.y)<10) danger=true;}));
-        projectiles.forEach(p=>{if(Math.abs(nx-p.x)<15 && Math.abs(ny-p.y)<15) danger=true;});
-        return !danger;
-      });
+       let danger=false;
+
+// Check ALL trails, including self
+[player, ...bots].forEach(b=>{
+  if(!b || !b.alive) return;
+  b.trail.forEach((t, i)=>{
+    // For own trail, skip last few points so bot can move forward
+    if (b === this && i >= b.trail.length - 10) return;
+    if (Math.abs(nx - t.x) < 10 && Math.abs(ny - t.y) < 10) {
+      danger = true;
+    }
+  });
+});
+
+// Projectiles check
+projectiles.forEach(p=>{
+  if(Math.abs(nx-p.x)<15 && Math.abs(ny-p.y)<15) danger=true;
+});
+
       if(safeDirs.length>0) this.dir=safeDirs[0];
       else{
         let allDirs=['up','down','left','right'];
