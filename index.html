@@ -84,9 +84,9 @@ const hud=document.getElementById('hud');
 const spectateMenu=document.getElementById('spectateMenu');
 
 let gameRunning=false, paused=false, miniMapExpanded=false;
-const PLAYER_SPEED=2, BOT_COUNT=15, TRAIL_LENGTH=50, DISC_COUNT=10;
+const PLAYER_SPEED=2.2, BOT_COUNT=45, TRAIL_LENGTH=50, DISC_COUNT=20;
 
-let storm={x:0,y:0,w:width,h:height,shrinkTimer:0,shrinkCooldown:30000,shrinkDuration:5000,moving:false,startX:0,startY:0,endX:0,endY:0,moveProgress:0};
+let storm={x:0,y:0,w:width,h:height,shrinkTimer:0,shrinkCooldown:30,shrinkDuration:50,moving:false,startX:0,startY:0,endX:0,endY:0,moveProgress:0};
 let camera={x:0,y:0};
 const tronNames=["BitCrusher","LightSpinner","GridGhost","NeonKnight","SparkWraith","ByteRider","PhotonPunk","LaserLad","Glowtron","CircuitCreeper","FlashFury","DataDash","TurboByte","PixelPhantom","ZapZebra","NeonNarwhal","QuantumQuill","ElectroElf","VaporViper","GlitchGoblin"];
 const bikeColors=["cyan","magenta","yellow","lime","blue","red","green"];
